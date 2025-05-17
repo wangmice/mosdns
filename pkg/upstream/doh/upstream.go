@@ -20,6 +20,7 @@
 package doh
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -48,10 +49,21 @@ type Upstream struct {
 	logger      *zap.Logger // non-nil
 	urlTemplate *urlpkg.URL
 	reqTemplate *http.Request
+	usePost     bool
 }
 
-func NewUpstream(endPoint string, rt http.RoundTripper, logger *zap.Logger) (*Upstream, error) {
-	req, err := http.NewRequest(http.MethodGet, endPoint, nil)
+func NewUpstream(endPoint string, rt http.RoundTripper, logger *zap.Logger, usePOST bool) (*Upstream, error) {
+	var req *http.Request
+	var err error
+
+	if usePOST {
+		// POST模式：创建空请求体模板（后续填充DNS二进制数据）
+		req, err = http.NewRequest(http.MethodPost, endPoint, nil)
+		req.Header.Set("Content-Type", "application/dns-message") // 强制设置RFC要求的头
+	} else {
+		// GET模式：初始化dns=参数占位模板
+		req, err = http.NewRequest(http.MethodGet, endPoint, nil)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse http request, %w", err)
 	}
@@ -67,11 +79,15 @@ func NewUpstream(endPoint string, rt http.RoundTripper, logger *zap.Logger) (*Up
 		logger:      logger,
 		urlTemplate: req.URL,
 		reqTemplate: req,
+		usePost:     usePOST,
 	}, nil
 }
 
 var (
 	bufPool4k = pool.NewBytesBufPool(4096)
+)
+var (
+	bufPoolget = pool.NewBytesBufPool(4096)
 )
 
 func (u *Upstream) ExchangeContext(ctx context.Context, q []byte) (*[]byte, error) {
@@ -88,16 +104,6 @@ func (u *Upstream) ExchangeContext(ctx context.Context, q []byte) (*[]byte, erro
 	wire[0] = 0
 	wire[1] = 0
 
-	queryLen := 4 + base64.RawURLEncoding.EncodedLen(len(wire))
-	queryBuf := make([]byte, queryLen)
-
-	p := 0
-	p += copy(queryBuf, "dns=")
-
-	// Padding characters for base64url MUST NOT be included.
-	// See: https://tools.ietf.org/html/rfc8484#section-6.
-	base64.RawURLEncoding.Encode(queryBuf[p:], wire)
-
 	type res struct {
 		r   *[]byte
 		err error
@@ -111,7 +117,7 @@ func (u *Upstream) ExchangeContext(ctx context.Context, q []byte) (*[]byte, erro
 		// reduces the connection reuse efficiency.
 		ctx, cancel := context.WithTimeout(context.Background(), defaultDoHTimeout)
 		defer cancel()
-		r, err := u.exchange(ctx, utils.BytesToStringUnsafe(queryBuf))
+		r, err := u.exchange(ctx, wire)
 		if err != nil {
 			u.logger.Check(zap.WarnLevel, "exchange failed").Write(zap.Error(err))
 		}
@@ -131,11 +137,41 @@ func (u *Upstream) ExchangeContext(ctx context.Context, q []byte) (*[]byte, erro
 	}
 }
 
-func (u *Upstream) exchange(ctx context.Context, dnsQuery string) (*[]byte, error) {
+func (u *Upstream) exchange(ctx context.Context, wire []byte) (*[]byte, error) {
 	req := u.reqTemplate.WithContext(ctx)
 	req.URL = new(urlpkg.URL)
 	*req.URL = *u.urlTemplate
-	req.URL.RawQuery = dnsQuery
+	if u.usePost { // POST 模式
+		req.Body = io.NopCloser(bytes.NewReader(wire))
+		req.ContentLength = int64(len(wire))
+	} else {
+		queryLen := 4 + base64.RawURLEncoding.EncodedLen(len(wire)) // "dns="前缀 + 编码后长度
+
+		// 从bufPoolget获取缓冲区
+		bb := bufPoolget.Get()
+		defer bufPoolget.Release(bb)
+		queryBuf := bb.Bytes()
+
+		// 检查缓冲区容量是否足够
+		if cap(queryBuf) < queryLen {
+			// 不足时回退到临时分配（避免污染池）
+			queryBuf = make([]byte, queryLen)
+		} else {
+			queryBuf = queryBuf[:queryLen]
+		}
+		p := copy(queryBuf, "dns=")
+
+		// Padding characters for base64url MUST NOT be included.
+		// See: https://tools.ietf.org/html/rfc8484#section-6.
+		base64.RawURLEncoding.Encode(queryBuf[p:], wire)
+		dnsQuery := utils.BytesToStringUnsafe(queryBuf)
+		req.URL.RawQuery = dnsQuery
+	}
+	defer func() {
+		if req.Body != nil {
+			req.Body.Close()
+		}
+	}()
 	resp, err := u.rt.RoundTrip(req)
 	if err != nil {
 		return nil, fmt.Errorf("http request failed: %w", err)

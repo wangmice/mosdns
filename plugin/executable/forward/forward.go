@@ -84,6 +84,7 @@ type UpstreamConfig struct {
 	BindToDevice string `yaml:"bind_to_device"`
 	Bootstrap    string `yaml:"bootstrap"`
 	BootstrapVer int    `yaml:"bootstrap_version"`
+	UsePost      bool   `yaml:"use_post"`
 }
 
 func Init(bp *coremain.BP, args any) (any, error) {
@@ -161,6 +162,7 @@ func NewForward(args *Args, opt Opts) (*Forward, error) {
 			},
 			Logger:        opt.Logger,
 			EventObserver: uw,
+			UsePost:        c.UsePost,
 		}
 
 		if c.DisableSNI {

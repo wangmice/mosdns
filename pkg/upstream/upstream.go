@@ -119,6 +119,7 @@ type Opt struct {
 	// EventObserver can observe connection events.
 	// Not implemented for quic based protocol (DoH3, DoQ).
 	EventObserver EventObserver
+	UsePost        bool   // 控制 DoH 请求方法
 }
 
 // NewUpstream creates a upstream.
@@ -467,7 +468,7 @@ func NewUpstream(addr string, opt Opt) (_ Upstream, err error) {
 			t = t1
 		}
 
-		u, err := doh.NewUpstream(addrURL.String(), t, opt.Logger)
+		u, err := doh.NewUpstream(addrURL.String(), t, opt.Logger, opt.UsePost)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create doh upstream, %w", err)
 		}
