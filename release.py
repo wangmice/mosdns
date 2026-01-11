@@ -18,33 +18,33 @@ logger = logging.getLogger(__name__)
 # more info: https://golang.org/doc/install/source
 # [(env : value),(env : value)]
 envs = [
-    [['GOOS', 'darwin'], ['GOARCH', 'amd64']],
-    [['GOOS', 'darwin'], ['GOARCH', 'arm64']],
+    # [['GOOS', 'darwin'], ['GOARCH', 'amd64']],
+    # [['GOOS', 'darwin'], ['GOARCH', 'arm64']],
     # [['GOOS', 'linux'], ['GOARCH', '386']],
     [['GOOS', 'linux'], ['GOARCH', 'amd64']],
 
-    [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '5']],
-    [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '6']],
-    [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '7']],
-    [['GOOS', 'linux'], ['GOARCH', 'arm64']],
+    # [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '5']],
+    # [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '6']],
+    # [['GOOS', 'linux'], ['GOARCH', 'arm'], ['GOARM', '7']],
+    #[['GOOS', 'linux'], ['GOARCH', 'arm64']],
 
     # [['GOOS', 'linux'], ['GOARCH', 'mips'], ['GOMIPS', 'hardfloat']],
     # [['GOOS', 'linux'], ['GOARCH', 'mips'], ['GOMIPS', 'softfloat']],
     # [['GOOS', 'linux'], ['GOARCH', 'mipsle'], ['GOMIPS', 'hardfloat']],
-    [['GOOS', 'linux'], ['GOARCH', 'mipsle'], ['GOMIPS', 'softfloat']],
+    # [['GOOS', 'linux'], ['GOARCH', 'mipsle'], ['GOMIPS', 'softfloat']],
 
     # [['GOOS', 'linux'], ['GOARCH', 'mips64'], ['GOMIPS64', 'hardfloat']],
     # [['GOOS', 'linux'], ['GOARCH', 'mips64'], ['GOMIPS64', 'softfloat']],
-    [['GOOS', 'linux'], ['GOARCH', 'mips64le'], ['GOMIPS64', 'hardfloat']],
+    # [['GOOS', 'linux'], ['GOARCH', 'mips64le'], ['GOMIPS64', 'hardfloat']],
     # [['GOOS', 'linux'], ['GOARCH', 'mips64le'], ['GOMIPS64', 'softfloat']],
 
-    [['GOOS', 'linux'], ['GOARCH', 'ppc64le']],
+    # [['GOOS', 'linux'], ['GOARCH', 'ppc64le']],
 
     # [['GOOS', 'freebsd'], ['GOARCH', '386']],
-    [['GOOS', 'freebsd'], ['GOARCH', 'amd64']],
+    # [['GOOS', 'freebsd'], ['GOARCH', 'amd64']],
 
     # [['GOOS', 'windows'], ['GOARCH', '386']],
-    [['GOOS', 'windows'], ['GOARCH', 'amd64']],
+    # [['GOOS', 'windows'], ['GOARCH', 'amd64']],
 ]
 
 
@@ -82,7 +82,7 @@ def go_build():
         logger.info(f'building {zip_filename}')
         try:
             subprocess.check_call(
-                f'go build -ldflags "-s -w -X main.version={VERSION}" -trimpath -o {bin_filename} ../', shell=True,
+                f'go build -gcflags="all=-l=4" -ldflags "-s -w -X main.version={VERSION}" -trimpath -o {bin_filename} ../', shell=True,
                 env=os_env)
 
             if args.upx:
